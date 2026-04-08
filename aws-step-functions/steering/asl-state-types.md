@@ -1,90 +1,33 @@
 # ASL Structure and State Types (JSONata Mode)
 
-## State Machine Top-Level Structure
-
-```json
-{
-  "Comment": "Description of the state machine",
-  "QueryLanguage": "JSONata",
-  "StartAt": "FirstStateName",
-  "TimeoutSeconds": 3600,
-  "Version": "1.0",
-  "States": {
-    "FirstStateName": { ... },
-    "SecondStateName": { ... }
-  }
-}
-```
-
-- `QueryLanguage`: Set to `"JSONata"` at top level. Defaults to `"JSONPath"` if omitted.
-- `StartAt`: Must exactly match a state name (case-sensitive).
-- `TimeoutSeconds`: Optional max execution time. Exceeding it throws `States.Timeout`.
-- `States`: Required object containing all state definitions.
-- State names must be unique and ≤ 80 Unicode characters.
-
-## Common Fields for All JSONata States
-
-| Field | Description |
-|-------|-------------|
-| `Type` | Required. One of: Task, Pass, Choice, Wait, Parallel, Map, Succeed, Fail |
-| `Comment` | Optional human-readable description |
-| `Next` | Name of next state (required for non-terminal states except Choice) |
-| `End` | Set to `true` for terminal states |
-| `Output` | Optional. Transform state output. Available in all types except Fail |
-| `Assign` | Optional. Store workflow variables. Available in all types except Succeed and Fail |
-| `QueryLanguage` | Optional per-state override |
-
-## Field Availability Matrix (JSONata)
-
-```
-              Task  Parallel  Map   Pass  Wait  Choice  Succeed  Fail
-Type           ✓      ✓       ✓      ✓     ✓      ✓       ✓       ✓
-Comment        ✓      ✓       ✓      ✓     ✓      ✓       ✓       ✓
-Output         ✓      ✓       ✓      ✓     ✓      ✓       ✓
-Assign         ✓      ✓       ✓      ✓     ✓      ✓
-Next/End       ✓      ✓       ✓      ✓     ✓
-Arguments      ✓      ✓
-Retry/Catch    ✓      ✓       ✓
-```
-
+Quick reference for the eight state types in AWS Step Functions. Reference variables-and-data.md for details about the fields available inside each state.
 ---
 
 ## Pass State
 
-Passes input to output, optionally transforming it. Useful for injecting data or reshaping payloads.
+Passes input to output, optionally transforming it with JSONata. Useful for injecting or transforming data. Without `Output`, the Pass state copies input to output unchanged.
 
 ```json
-"InjectData": {
-  "Type": "Pass",
-  "Output": {
-    "greeting": "{% 'Hello, ' & $states.input.name %}",
-    "timestamp": "{% $now() %}"
-  },
-  "Next": "NextState"
-}
-```
-
-With variable assignment:
-
-```json
-"StoreDefaults": {
+"SetupAndGreet": {
   "Type": "Pass",
   "Assign": {
     "retryCount": 0,
     "maxRetries": 3,
     "config": "{% $states.input.configuration %}"
   },
+  "Output": {
+    "greeting": "{% 'Hello, ' & $states.input.name %}",
+    "timestamp": "{% $now() %}"
+  },
   "Next": "ProcessItem"
 }
 ```
-
-Without `Output`, the Pass state copies input to output unchanged.
 
 ---
 
 ## Task State
 
-Executes work via AWS service integrations, activities, or HTTP APIs.
+Executes work via AWS service integrations, activities, or HTTP APIs. Reference service-integrations.md for full details.
 
 ### Required Fields
 - `Resource`: ARN identifying the task to execute
@@ -93,54 +36,25 @@ Executes work via AWS service integrations, activities, or HTTP APIs.
 - `Arguments`: Input to the task (replaces JSONPath `Parameters`)
 - `Output`: Transform the result
 - `Assign`: Store variables from input or result
-- `TimeoutSeconds`: Max task duration (default 60, accepts JSONata expression)
+- `TimeoutSeconds`: Max task duration (default 99999999, accepts JSONata expression)
 - `HeartbeatSeconds`: Heartbeat interval (must be < TimeoutSeconds)
 - `Retry`: Retry policy array
 - `Catch`: Error handler array
 - `Credentials`: Cross-account role assumption
 
-### Lambda Invoke Example
-
-```json
-"InvokeLambda": {
-  "Type": "Task",
-  "Resource": "arn:aws:states:::lambda:invoke",
-  "Arguments": {
-    "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:MyFunc:$LATEST",
-    "Payload": {
-      "orderId": "{% $states.input.orderId %}",
-      "customer": "{% $states.input.customer %}"
-    }
-  },
-  "Assign": {
-    "processedResult": "{% $states.result.Payload %}"
-  },
-  "Output": "{% $states.result.Payload %}",
-  "Next": "NextState"
-}
-```
-
-### Dynamic Timeout
-
-```json
-"LongRunningTask": {
-  "Type": "Task",
-  "Resource": "arn:aws:states:::lambda:invoke",
-  "Arguments": {
-    "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:SlowFunc:$LATEST",
-    "Payload": "{% $states.input %}"
-  },
-  "TimeoutSeconds": "{% $states.input.timeoutValue %}",
-  "HeartbeatSeconds": "{% $states.input.heartbeatValue %}",
-  "Next": "Done"
-}
-```
-
 ---
 
 ## Choice State
 
-Adds branching logic. Uses `Condition` field with JSONata boolean expressions (replaces JSONPath `Variable` + comparison operators).
+Uses `Choices` and `Condition` fields with JSONata boolean expressions to implement branching logic.
+
+Key points:
+- `Condition` must evaluate to a boolean.
+- Each Choice Rule can have its own `Assign` and `Output`.
+- If a rule matches, its `Assign`/`Output` are used (not the state-level ones).
+- If no rule matches, the state-level `Assign` is evaluated and `Default` is followed.
+- `Default` is optional but recommended — without it, `States.NoChoiceMatched` is thrown.
+- Choice states cannot be terminal (no `End` field).
 
 ### Structure
 
@@ -174,16 +88,6 @@ Adds branching logic. Uses `Condition` field with JSONata boolean expressions (r
 }
 ```
 
-Key points:
-- `Condition` must evaluate to a boolean.
-- Each Choice Rule can have its own `Assign` and `Output`.
-- If a rule matches, its `Assign`/`Output` are used (not the state-level ones).
-- If no rule matches, the state-level `Assign` is evaluated and `Default` is followed.
-- `Default` is optional but recommended — without it, `States.NoChoiceMatched` is thrown.
-- Choice states cannot be terminal (no `End` field).
-
-### Complex Conditions
-
 JSONata supports rich boolean logic:
 
 ```json
@@ -200,16 +104,6 @@ JSONata supports rich boolean logic:
 ## Wait State
 
 Delays execution for a specified duration or until a timestamp.
-
-### Wait by Seconds
-
-```json
-"WaitTenSeconds": {
-  "Type": "Wait",
-  "Seconds": 10,
-  "Next": "Continue"
-}
-```
 
 ### Wait with Dynamic Seconds
 
@@ -251,23 +145,11 @@ Terminates the state machine (or a Parallel branch / Map iteration) successfully
 }
 ```
 
-Without `Output`, passes input through as output. No `Next` field allowed.
-
 ---
 
 ## Fail State
 
 Terminates the state machine with an error.
-
-```json
-"OrderFailed": {
-  "Type": "Fail",
-  "Error": "OrderValidationError",
-  "Cause": "The order could not be validated"
-}
-```
-
-### Dynamic Error and Cause
 
 ```json
 "DynamicFail": {
@@ -276,18 +158,7 @@ Terminates the state machine with an error.
   "Cause": "{% $states.input.errorMessage %}"
 }
 ```
-
-Build rich, defensive error messages with fallbacks for missing fields:
-
-```json
-"OrderProcessingFailed": {
-  "Type": "Fail",
-  "Error": "OrderProcessingError",
-  "Cause": "{% 'Failed to process order ' & ($exists($orderId) ? $orderId : 'unknown') & ': ' & ($exists($error.Error) ? $error.Error : 'Unknown error') & ' - ' & ($exists($error.Cause) ? $error.Cause : 'No details available') & '. Timestamp: ' & $now() %}"
-}
-```
-
-No `Next`, `End`, `Output`, or `Assign` fields. Fail states are always terminal.
+Reference error-handling.md for more information.
 
 ---
 
@@ -439,9 +310,11 @@ Inside `ItemSelector`, you can access:
 | `ItemBatcher` | Batch items into sub-arrays |
 | `ResultWriter` | Write results to an external resource |
 
-### ProcessorConfig
+### Map ProcessorConfig
 
-The `ItemProcessor` can include a `ProcessorConfig` to control execution mode:
+The `ItemProcessor` can include a `ProcessorConfig` to control execution mode.
+- `INLINE` (default) — iterations run within the parent execution. Use for most cases.
+- `DISTRIBUTED` — iterations run as child executions. Use for large-scale processing (thousands+ items), items read from S3, or when you need per-iteration execution history.
 
 ```json
 "ItemProcessor": {
@@ -453,10 +326,7 @@ The `ItemProcessor` can include a `ProcessorConfig` to control execution mode:
 }
 ```
 
-- `INLINE` (default) — iterations run within the parent execution. Use for most cases.
-- `DISTRIBUTED` — iterations run as child executions. Use for large-scale processing (thousands+ items), items read from S3, or when you need per-iteration execution history.
-
-### Failure Tolerance
+### Map Failure Tolerance
 
 ```json
 "ProcessWithTolerance": {

@@ -2,7 +2,7 @@
 
 ## Polling Loop (Wait → Check → Choice)
 
-Many AWS operations are asynchronous — you start them and then poll until they complete. The pattern is: initial wait → call describe/status API → check result → short wait → loop back.
+Many AWS operations are asynchronous — you start them and then poll until they complete. The pattern is: Start Task → initial wait (estimate this based on the expected time it takes to complete the Task) → call describe/status API → check result → short wait → loop back.
 
 ```json
 "SubmitOrder": {
@@ -49,7 +49,7 @@ Many AWS operations are asynchronous — you start them and then poll until they
 ```
 
 Key elements:
-- Initial longer wait gives the operation time to start. Shorter poll interval for subsequent checks.
+- Initial longer wait gives the operation time to run. Shorter poll interval for subsequent checks.
 - Choice state routes to success, failure, or back to the wait loop.
 - Always add Retry on the status-check Task to handle transient API errors.
 - Consider adding `TimeoutSeconds` on the state machine or a counter variable to prevent infinite polling.

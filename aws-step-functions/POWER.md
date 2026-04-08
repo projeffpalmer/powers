@@ -1,14 +1,12 @@
 ---
 name: "aws-step-functions"
 displayName: "AWS Step Functions"
-description: "Build workflows with AWS Step Functions state machines using the JSONata query language. Covers Amazon States Language (ASL) structure, all state types, variables, data transformation, error handling, and service integrations."
+description: "Build workflows with AWS Step Functions state machines using the JSONata query language. Covers Amazon States Language (ASL) structure, state types, variables, data transformation, error handling, AWS service integration, and migrating from the JSONPath to the JSONata query language."
 keywords: ["step functions", "state machine", "serverless", "jsonata", "asl", "amazon states language", "workflow", "orchestration"]
 author: "AWS"
 ---
 
 # AWS Step Functions
-
-AWS Step Functions provides visual workflow orchestration with native integrations to 9,000+ API actions across 200+ AWS services. Define workflows as state machines in Amazon States Language using the JSONata query language instead of legacy JSONPath.
 
 ## Overview
 
@@ -22,7 +20,7 @@ This power provides comprehensive guidance for writing state machines in ASL, co
 - Error handling
 - AWS Service integration patterns
 - Data transformation and architecture examples
-- Validation and testing of ASL structure
+- Validation and testing of state machines
 - How to migrate from JSONPath to JSONata
 
 ## When to Load Steering Files
@@ -30,10 +28,10 @@ This power provides comprehensive guidance for writing state machines in ASL, co
 Load the appropriate steering file based on what the user is working on:
 
 - **ASL structure**, **state types**, **Task**, **Pass**, **Choice**, **Wait**, **Succeed**, **Fail**, **Parallel**, **Map** → see `asl-state-types.md`
-- **Variables**, **Assign**, **data passing**, **scope**, **$states**, **input**, **output**, **Arguments**, **Output**, **data transformation** → see `variables-and-data.md`
-- **Error handling**, **Retry**, **Catch**, **fallback**, **error codes**, **States.Timeout**, **States.ALL** → see `error-handling.md`
+- **Variables**, **Assign**, **data passing**, **scope**, **$states**, **input**, **output**, **Arguments**, **Output**, **data transformation**, **QueryEvaluationError** → see `variables-and-data.md`
+- **Error handling**, **troubleshooting**, **Retry**, **Catch**, **fallback**, **error codes**, **States.Timeout**, **States.ALL** → see `error-handling.md`
 - **Service integrations**, **Lambda invoke**, **DynamoDB**, **SNS**, **SQS**, **SDK integrations**, **Resource ARN**, **sync**, **async** → see `service-integrations.md`
-- **Converting from JSONPath**, **migration**, **JSONPath to JSONata**, **InputPath**, **Parameters**, **ResultSelector**, **ResultPath**, **OutputPath**, **intrinsic functions**, **Iterator**, **payload template** → see `converting-from-jsonpath-to-jsonata.md`
+- **Migrating from JSONPath to JSONata**, **migration**, **JSONPath to JSONata**, **InputPath**, **Parameters**, **ResultSelector**, **ResultPath**, **OutputPath**, **intrinsic functions**, **Iterator**, **payload template** → see `migrating-from-jsonpath-to-jsonata.md`
 - **Validation**, **linting**, **testing**, **TestState**, **test state**, **mock**, **mocking**, **unit test**, **inspection level**, **DEBUG**, **TRACE**, **validate state**, **test in isolation** → see `validation-and-testing.md`
 
 ## Quick Reference
@@ -82,28 +80,6 @@ JSONata is the modern, preferred way to reference and transform data in ASL. It 
 { "Type": "Task", "QueryLanguage": "JSONata", ... }
 ```
 
-**JSONata Expression syntax** 
-ADD MORE COMPLEX EXAMPLE
-Wrap expressions in `{% %}`:
-```json
-"Arguments": {
-  "userId": "{% $states.input.user.id %}",
-  "greeting": "{% 'Hello, ' & $states.input.user.name %}",
-  "total": "{% $sum($states.input.items.price) %}"
-}
-```
-
-**Built-in Step Functions JSONata functions:**
-
-| Function | Purpose |
-|----------|---------|
-| `$partition(array, size)` | Partition array into chunks |
-| `$range(start, end, step)` | Generate array of values |
-| `$hash(data, algorithm)` | Calculate hash (MD5, SHA-1, SHA-256, SHA-384, SHA-512) |
-| `$random([seed])` | Random number 0 ≤ n < 1, optional seed |
-| `$uuid()` | Generate v4 UUID |
-| `$parse(jsonString)` | Deserialize JSON string |
-
 **JSONPath is still supported** and is the default if `QueryLanguage` is omitted — existing state machines do not need to be migrated.
 
 ### The `$states` Reserved Variable (JSONata only)
@@ -113,94 +89,6 @@ $states.input        → Original state input
 $states.result       → Task/Parallel/Map result (on success)
 $states.errorOutput  → Error output (only in Catch)
 $states.context      → Execution context object
-```
-
-### Key Fields in Step Functions (JSONata only)
-
-| Field | Purpose | Available In |
-|-------|---------|-------------|
-| `Arguments` | Input to task/branches | Task, Parallel |
-| `Output` | Transform state output | All except Fail |
-| `Assign` | Store workflow variables | All except Succeed, Fail |
-| `Condition` | Boolean branching | Choice rules |
-| `Items` | Array for iteration | Map |
-
-### Functions Provided by Step Functions (JSONata only)
-
-| Function | Purpose |
-|----------|---------|
-| `$partition(array, size)` | Partition array into chunks |
-| `$range(start, end, step)` | Generate array of values |
-| `$hash(data, algorithm)` | Calculate hash (MD5, SHA-1, SHA-256, SHA-384, SHA-512) |
-| `$random([seed])` | Random number 0 ≤ n < 1, optional seed |
-| `$uuid()` | Generate v4 UUID |
-| `$parse(jsonString)` | Deserialize JSON string |
-
-Plus all [built-in JSONata functions](https://github.com/jsonata-js/jsonata/tree/master/docs)
-
-### Minimal Complete Example
-
-```json
-{
-  "Comment": "Order processing workflow",
-  "QueryLanguage": "JSONata",
-  "StartAt": "ValidateOrder",
-  "States": {
-    "ValidateOrder": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::dynamodb:getItem",
-      "Arguments": {
-        "TableName": "OrdersTable",
-        "Key": {
-          "orderId": {
-            "S": "{% $states.input.orderId %}"
-          }
-        }
-      },
-      "Assign": {
-        "orderId": "{% $states.input.orderId %}"
-      },
-      "Output": "{% $states.result.Item %}",
-      "Next": "CheckStock"
-    },
-    "CheckStock": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Condition": "{% $states.input.inStock = true %}",
-          "Next": "ProcessPayment"
-        }
-      ],
-      "Default": "OutOfStock"
-    },
-    "ProcessPayment": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::sqs:sendMessage",
-      "Arguments": {
-        "QueueUrl": "https://sqs.us-east-1.amazonaws.com/123456789012/PaymentQueue",
-        "MessageBody": "{% $string({'orderId': $orderId, 'amount': $states.input.total.N}) %}"
-      },
-      "Output": {
-        "orderId": "{% $orderId %}",
-        "messageId": "{% $states.result.MessageId %}"
-      },
-      "Retry": [
-        {
-          "ErrorEquals": ["States.TaskFailed"],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 3,
-          "BackoffRate": 2.0
-        }
-      ],
-      "End": true
-    },
-    "OutOfStock": {
-      "Type": "Fail",
-      "Error": "OutOfStockError",
-      "Cause": "Requested item is out of stock"
-    }
-  }
-}
 ```
 
 ## Best Practices
@@ -224,6 +112,7 @@ Plus all [built-in JSONata functions](https://github.com/jsonata-js/jsonata/tree
 - Using `$` or `$$` at the top level of a JSONata expression — use `$states.input` instead.
 - Forgetting `{% %}` delimiters around JSONata expressions — the string will be treated as a literal.
 - Assigning variables in `Assign` and expecting them in `Output` of the same state — new values only take effect in the next state.
+- Reference validation-and-testing.md and error-handling.md for detailed troubleshooting information.
 
 ## Resources
 

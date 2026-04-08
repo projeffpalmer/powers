@@ -1,4 +1,20 @@
-# Variables and Data Transformation (JSONata Mode)
+# Variables and Data Transformation (JSONata)
+
+## Field Quick Reference
+
+| Field | Purpose | Available In |
+|-------|---------|-------------|
+| `Type` | State type identifier | Task, Parallel, Map, Pass, Wait, Choice, Succeed, Fail |
+| `Comment` | Human-readable description | Task, Parallel, Map, Pass, Wait, Choice, Succeed, Fail |
+| `Output` | Transform state output | Task, Parallel, Map, Pass, Wait, Choice, Succeed |
+| `Assign` | Store workflow variables | Task, Parallel, Map, Pass, Wait, Choice |
+| `Next` / `End` | Transition control | Task, Parallel, Map, Pass, Wait |
+| `Arguments` | Input to task/branches | Task, Parallel |
+| `Retry` & `Catch` | Error handling | Task, Parallel, Map |
+| `Items` | Array for iteration | Map |
+| `ItemSelector` | Reshape each item before processing | Map |
+| `Condition` | Boolean branching | Choice (inside rules) |
+| `Error` & `Cause` | Error name and description (accept JSONata) | Fail |
 
 ## JSONata Expression Syntax
 
@@ -61,26 +77,6 @@ $states = {
   "errorOutput": // Error Output (only available in Catch)
   "context":     // Context object (execution metadata)
 }
-```
-
-### Where Each Field Is Accessible
-
-| Field | Accessible In |
-|-------|--------------|
-| `$states.input` | All fields that accept JSONata, in any state |
-| `$states.result` | Top-level `Output` and `Assign` in Task, Parallel, Map states |
-| `$states.errorOutput` | `Output` and `Assign` inside a `Catch` block |
-| `$states.context` | All fields that accept JSONata, in any state |
-
-### Context Object
-
-`$states.context` provides execution metadata:
-
-```json
-"executionId": "{% $states.context.Execution.Id %}",
-"startTime": "{% $states.context.Execution.StartTime %}",
-"stateName": "{% $states.context.State.Name %}",
-"originalInput": "{% $states.context.Execution.Input %}"
 ```
 
 Useful context fields:
@@ -163,12 +159,6 @@ Prepend the variable name with `$`:
   "Next": "CheckPrice"
 }
 ```
-
-### States That Support Assign
-
-Pass, Task, Map, Parallel, Choice, Wait — all support `Assign`.
-
-Succeed and Fail do NOT support `Assign`.
 
 ### Assign in Choice Rules and Catch
 
@@ -286,7 +276,7 @@ In a Catch block on a Parallel or Map state, `Assign` can assign values to varia
 
 ### Arguments
 
-Provides input to Task and Parallel states (replaces JSONPath `Parameters`):
+Provides input to Task and Parallel states:
 
 ```json
 "Arguments": {
@@ -296,17 +286,9 @@ Provides input to Task and Parallel states (replaces JSONPath `Parameters`):
 }
 ```
 
-Or as a single JSONata expression:
-
-```json
-"Arguments": "{% $states.input.payload %}"
-```
-
-`Arguments` can reference `$states.input` and `$states.context`, but NOT `$states.result` or `$states.errorOutput`.
-
 ### Output
 
-Transforms the state output (replaces JSONPath `ResultSelector` + `ResultPath` + `OutputPath`):
+Transforms the state output:
 
 ```json
 "Output": {
@@ -314,14 +296,6 @@ Transforms the state output (replaces JSONPath `ResultSelector` + `ResultPath` +
   "result": "{% $states.result.Payload %}",
   "processedAt": "{% $now() %}"
 }
-```
-
-Or as a single expression or literal value:
-
-```json
-"Output": "{% $states.result.Payload %}"
-"Output": 42
-"Output": { "status": "done" }
 ```
 
 If `Output` is not provided:
@@ -496,3 +470,16 @@ Useful for sorting timestamps, calculating durations, or finding the most recent
   "mostRecent": "{% $sort($states.input.timestamps, function($a, $b) { $toMillis($a) < $toMillis($b) })[0] %}"
 }
 ```
+
+**Built-in Step Functions JSONata functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `$partition(array, size)` | Partition array into chunks |
+| `$range(start, end, step)` | Generate array of values |
+| `$hash(data, algorithm)` | Calculate hash (MD5, SHA-1, SHA-256, SHA-384, SHA-512) |
+| `$random([seed])` | Random number 0 ≤ n < 1, optional seed |
+| `$uuid()` | Generate v4 UUID |
+| `$parse(jsonString)` | Deserialize JSON string |
+
+Plus all [built-in JSONata functions](https://github.com/jsonata-js/jsonata/tree/master/docs)
