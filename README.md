@@ -20,6 +20,13 @@ Documentation is available at https://kiro.dev/docs/powers/
 
 ---
 
+### aws-devops-agent
+**AWS DevOps Agent** - AI agent for AWS operational intelligence via the AWS MCP Server. Investigate incidents, optimize costs, review architecture, map topology, and get remediation using DevOps Agent APIs.
+
+**MCP Servers:** aws-mcp
+
+---
+
 ### aws-healthomics
 
 **Create and Manage Bioinformatics Workflows with AWS HealthOmics** - create, migrate, run, debug and identify optimization opportunities for bioinformatics workflows in AWS HealthOmics.
